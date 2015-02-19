@@ -2652,6 +2652,34 @@ evdns_base_nameserver_sockaddr_add(struct evdns_base *base,
 	return res;
 }
 
+int
+evdns_base_get_nameserver_addr(struct evdns_base *base, int idx,
+    struct sockaddr *sa, ev_socklen_t len)
+{
+	int result = -1;
+	int i;
+	struct nameserver *server;
+	EVDNS_LOCK(base);
+	server = base->server_head;
+	for (i = 0; i < idx && server; ++i, server = server->next) {
+		if (server->next == base->server_head)
+			goto done;
+	}
+	if (! server)
+		goto done;
+
+	if (server->addrlen > len) {
+		result = (int) server->addrlen;
+		goto done;
+	}
+
+	memcpy(sa, &server->address, server->addrlen);
+	result = (int) server->addrlen;
+done:
+	EVDNS_UNLOCK(base);
+	return result;
+}
+
 /* remove from the queue */
 static void
 evdns_request_remove(struct request *req, struct request **head)
@@ -3324,7 +3352,7 @@ strtoint(const char *const str)
 
 /* Parse a number of seconds into a timeval; return -1 on error. */
 static int
-strtotimeval(const char *const str, struct timeval *out)
+evdns_strtotimeval(const char *const str, struct timeval *out)
 {
 	double d;
 	char *endptr;
@@ -3427,13 +3455,13 @@ evdns_base_set_option_impl(struct evdns_base *base,
 		base->global_search_state->ndots = ndots;
 	} else if (str_matches_option(option, "timeout:")) {
 		struct timeval tv;
-		if (strtotimeval(val, &tv) == -1) return -1;
+		if (evdns_strtotimeval(val, &tv) == -1) return -1;
 		if (!(flags & DNS_OPTION_MISC)) return 0;
 		log(EVDNS_LOG_DEBUG, "Setting timeout to %s", val);
 		memcpy(&base->global_timeout, &tv, sizeof(struct timeval));
 	} else if (str_matches_option(option, "getaddrinfo-allow-skew:")) {
 		struct timeval tv;
-		if (strtotimeval(val, &tv) == -1) return -1;
+		if (evdns_strtotimeval(val, &tv) == -1) return -1;
 		if (!(flags & DNS_OPTION_MISC)) return 0;
 		log(EVDNS_LOG_DEBUG, "Setting getaddrinfo-allow-skew to %s",
 		    val);
@@ -3475,7 +3503,7 @@ evdns_base_set_option_impl(struct evdns_base *base,
 		base->global_outgoing_addrlen = len;
 	} else if (str_matches_option(option, "initial-probe-timeout:")) {
 		struct timeval tv;
-		if (strtotimeval(val, &tv) == -1) return -1;
+		if (evdns_strtotimeval(val, &tv) == -1) return -1;
 		if (tv.tv_sec > 3600)
 			tv.tv_sec = 3600;
 		if (!(flags & DNS_OPTION_MISC)) return 0;

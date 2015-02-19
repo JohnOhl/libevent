@@ -406,6 +406,22 @@ dns_server(void)
 	 * the only nameserver. */
 	evdns_base_nameserver_sockaddr_add(base, (struct sockaddr*)&ss, slen, 0);
 	tt_int_op(evdns_base_count_nameservers(base), ==, 1);
+	{
+		struct sockaddr_storage ss2;
+		int slen2;
+
+		memset(&ss2, 0, sizeof(ss2));
+
+		slen2 = evdns_base_get_nameserver_addr(base, 0, (struct sockaddr *)&ss2, 3);
+		tt_int_op(slen2, ==, slen);
+		tt_int_op(ss2.ss_family, ==, 0);
+		slen2 = evdns_base_get_nameserver_addr(base, 0, (struct sockaddr *)&ss2, sizeof(ss2));
+		tt_int_op(slen2, ==, slen);
+		tt_mem_op(&ss2, ==, &ss, slen);
+
+		slen2 = evdns_base_get_nameserver_addr(base, 1, (struct sockaddr *)&ss2, sizeof(ss2));
+		tt_int_op(-1, ==, slen2);
+	}
 
 	/* Send some queries. */
 	evdns_base_resolve_ipv4(base, "zz.example.com", DNS_QUERY_NO_SEARCH,
@@ -1788,9 +1804,15 @@ testleak_setup(const struct testcase_t *testcase)
 	struct testleak_env_t *env;
 
 	allocated_chunks = 0;
+
+	/* Reset allocation counter, to start allocations from the very beginning.
+	 * (this will avoid false-positive negative numbers for allocated_chunks)
+	 */
+	libevent_global_shutdown();
+
 	event_set_mem_functions(cnt_malloc, cnt_realloc, cnt_free);
-	if (!libevent_tests_running_in_debug_mode)
-		event_enable_debug_mode();
+
+	event_enable_debug_mode();
 
 	/* not mm_calloc: we don't want to mess with the count. */
 	env = calloc(1, sizeof(struct testleak_env_t));
@@ -1811,8 +1833,8 @@ testleak_cleanup(const struct testcase_t *testcase, void *env_)
 #ifdef EVENT__DISABLE_DEBUG_MODE
 	tt_int_op(allocated_chunks, ==, 0);
 #else
-	/* FIXME: that's `1' because of event_debug_map_HT_GROW */
-	tt_int_op(allocated_chunks, ==, 1);
+	libevent_global_shutdown();
+	tt_int_op(allocated_chunks, ==, 0);
 #endif
 	ok = 1;
 end:
