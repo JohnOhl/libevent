@@ -308,6 +308,8 @@ bufferevent_init_common_(struct bufferevent_private *bufev_private,
 		}
 	}
 
+	bufev_private->free_context = NULL;
+	bufev_private->context = NULL;
 	bufev_private->refcnt = 1;
 	bufev->ev_base = base;
 
@@ -376,6 +378,19 @@ bufferevent_setcb(struct bufferevent *bufev,
 	bufev->errorcb = eventcb;
 
 	bufev->cbarg = cbarg;
+	BEV_UNLOCK(bufev);
+}
+
+void
+bufferevent_set_freecb(struct bufferevent *bufev, void (*free_context)(void *), void *context) {
+	struct bufferevent_private *bufev_private =
+	EVUTIL_UPCAST(bufev, struct bufferevent_private, bev);
+
+	BEV_LOCK(bufev);
+
+	bufev_private->free_context = free_context;
+	bufev_private->context = context;
+
 	BEV_UNLOCK(bufev);
 }
 
@@ -737,6 +752,10 @@ bufferevent_finalize_cb_(struct event_callback *evcb, void *arg_)
 	/* Clean up the shared info */
 	if (bufev->be_ops->destruct)
 		bufev->be_ops->destruct(bufev);
+
+	/* If we have a free context callback, execute it */
+	if (bufev_private->free_context)
+		bufev_private->free_context(bufev_private->context);
 
 	/* XXX what happens if refcnt for these buffers is > 1?
 	 * The buffers can share a lock with this bufferevent object,

@@ -205,6 +205,12 @@ struct bufferevent_private {
 
 	/** Rate-limiting information for this bufferevent */
 	struct bufferevent_rate_limit *rate_limiting;
+
+	/** Function to free context when we're done. */
+	void (*free_context)(void *);
+
+	/** User-supplied argument to the filters. */
+	void *context;
 };
 
 /** Possible operations for a control callback. */

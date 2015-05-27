@@ -325,6 +325,19 @@ void bufferevent_setcb(struct bufferevent *bufev,
     bufferevent_event_cb eventcb, void *cbarg);
 
 /**
+  Changes/sets the free context callback for the bufferevent
+
+  @param bufev the bufferevent object for which to change the callback
+  @param free_context A function to use to free the filter context when
+   this bufferevent is freed.
+  @param ctx A context pointer to pass to the filter functions.
+  */
+EVENT2_EXPORT_SYMBOL
+void
+bufferevent_set_freecb(struct bufferevent *bufev,
+    void (*free_context)(void *), void *context);
+
+/**
  Retrieves the callbacks for a bufferevent.
 
  @param bufev the bufferevent to examine.
